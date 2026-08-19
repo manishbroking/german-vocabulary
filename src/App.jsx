@@ -1315,6 +1315,18 @@ function useLofiMusic() {
 // new words trickled in one-by-one in list order (like working through the PDF),
 // and occasional early review thrown in for reinforcement. Avoids repeating the
 // same word twice in a row when other options exist.
+function pickNextNewWord(source, stats, excludeId) {
+  if (source.length === 0) return null;
+  const brandNew = source.filter((w) => {
+    const st = stats.wordStats[w.id];
+    return !st || st.seen === 0;
+  });
+  if (brandNew.length === 0) return null;
+  const first = brandNew[0];
+  if (first.id !== excludeId || brandNew.length === 1) return first;
+  return brandNew[1];
+}
+
 function pickSmartWord(source, stats, excludeId) {
   if (source.length === 0) return null;
   const now = Date.now();
@@ -2204,7 +2216,7 @@ function PassiveQuiz({ pool, category, filteredPoolWords, allVocab, stats, recor
   const buildQuestion = useCallback(
     (excludeId) => {
       const source = filteredPoolWords;
-      const target = pool === "all" ? pickSmartWord(source, stats, excludeId) : source.length ? source[Math.floor(Math.random() * source.length)] : null;
+      const target = pool === "all" ? pickSmartWord(source, stats, excludeId) : pool === "new" ? pickNextNewWord(source, stats, excludeId) : source.length ? source[Math.floor(Math.random() * source.length)] : null;
       if (!target) return null;
       const targetKey = englishKey(target.en);
       const others = shuffle(
@@ -2344,7 +2356,7 @@ function ActiveQuiz({ pool, category, filteredPoolWords, allVocab, stats, record
     (excludeId) => {
       const source = filteredPoolWords;
       if (source.length === 0) return null;
-      return pool === "all" ? pickSmartWord(source, stats, excludeId) : source[Math.floor(Math.random() * source.length)];
+      return pool === "all" ? pickSmartWord(source, stats, excludeId) : pool === "new" ? pickNextNewWord(source, stats, excludeId) : source[Math.floor(Math.random() * source.length)];
     },
     [pool, filteredPoolWords, stats]
   );
@@ -2607,11 +2619,11 @@ function GroupPractice({ vocab, stats, recordAttempt, locked }) {
 
   if (phase === "setup") {
     return (
-      <div className="vh-card" style={styles.card}>
-        <h2 style={styles.sectionTitle}>Group practice</h2>
+      <div className="vh-card vh-group-card" style={styles.card}>
+        <h2 className="vh-group-title" style={styles.sectionTitle}>Group practice</h2>
         <p style={styles.helperText}>Fill in a whole batch of words at once, then submit together and see your score.</p>
 
-        <div style={styles.settingsRow}>
+        <div className="vh-group-settings" style={styles.settingsRow}>
           <label style={styles.settingsLabel}>
             Category
             <select value={groupCategory} onChange={(e) => setGroupCategory(e.target.value)} style={{ ...styles.select, width: 180 }}>
@@ -2633,13 +2645,13 @@ function GroupPractice({ vocab, stats, recordAttempt, locked }) {
           </label>
         </div>
 
-        <div style={{ marginTop: 4, marginBottom: 18 }}>
+        <div className="vh-group-direction" style={{ marginTop: 4, marginBottom: 18 }}>
           <div style={{ ...styles.settingsLabel, marginBottom: 8 }}>Direction</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="vh-btn" style={{ ...styles.dirBtn, ...(direction === "de-en" ? styles.dirBtnActive : {}) }} onClick={() => setDirection("de-en")}>
+          <div className="vh-group-dir-buttons" style={{ display: "flex", gap: 8 }}>
+            <button className="vh-btn vh-group-dir-btn" style={{ ...styles.dirBtn, ...(direction === "de-en" ? styles.dirBtnActive : {}) }} onClick={() => setDirection("de-en")}>
               German → English
             </button>
-            <button className="vh-btn" style={{ ...styles.dirBtn, ...(direction === "en-de" ? styles.dirBtnActive : {}) }} onClick={() => setDirection("en-de")}>
+            <button className="vh-btn vh-group-dir-btn" style={{ ...styles.dirBtn, ...(direction === "en-de" ? styles.dirBtnActive : {}) }} onClick={() => setDirection("en-de")}>
               English → German
             </button>
           </div>
@@ -2650,7 +2662,7 @@ function GroupPractice({ vocab, stats, recordAttempt, locked }) {
         ) : source.length === 0 ? (
           <p style={styles.helperText}>No words in this category yet.</p>
         ) : (
-          <button style={styles.checkBtn} className="vh-btn" onClick={start}>
+          <button style={styles.checkBtn} className="vh-btn vh-group-start" onClick={start}>
             Start batch ({Math.min(size, source.length)} words) →
           </button>
         )}
@@ -2661,8 +2673,8 @@ function GroupPractice({ vocab, stats, recordAttempt, locked }) {
   if (phase === "quiz") {
     const filledCount = batch.filter((w) => (answers[w.id] || "").trim().length > 0).length;
     return (
-      <div className="vh-card" style={styles.card}>
-        <div style={styles.batchProgress}>
+      <div className="vh-card vh-group-card" style={styles.card}>
+        <div className="vh-group-progress" style={styles.batchProgress}>
           <span>
             {direction === "de-en" ? "German → English" : "English → German"} · {filledCount} of {batch.length} filled
           </span>
@@ -2671,7 +2683,7 @@ function GroupPractice({ vocab, stats, recordAttempt, locked }) {
           </div>
         </div>
 
-        <div style={styles.worksheetList}>
+        <div className="vh-group-worksheet" style={styles.worksheetList}>
           {batch.map((w, i) => {
             const artColor = ARTICLE_COLORS[w.artikel] || null;
             const prompt = direction === "de-en" ? w.de : w.en;
@@ -2730,14 +2742,14 @@ function GroupPractice({ vocab, stats, recordAttempt, locked }) {
   const { emoji, text } = scoreEmoji(pct);
 
   return (
-    <div className="vh-card" style={{ ...styles.card, textAlign: "center" }}>
+    <div className="vh-card vh-group-card" style={{ ...styles.card, textAlign: "center" }}>
       <div style={{ fontSize: 52, marginBottom: 4, animation: "vhPop .4s ease" }}>{emoji}</div>
       <div style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700, color: "#1F2A44" }}>
         Your score: {correctCount}/{results.length} ({pct}%)
       </div>
       <div style={{ color: "#8A8474", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>{text}</div>
 
-      <div style={{ ...styles.worksheetList, textAlign: "left", maxWidth: 520, margin: "0 auto" }}>
+      <div className="vh-group-worksheet" style={{ ...styles.worksheetList, textAlign: "left", maxWidth: 520, margin: "0 auto" }}>
         {results.map((r, i) => (
           <div key={r.word.id} className="vh-worksheet-row" style={{ ...styles.worksheetRow, ...(r.correct ? styles.worksheetRowGood : styles.worksheetRowBad) }}>
             <span style={styles.worksheetIndex}>{i + 1}</span>
@@ -3225,6 +3237,49 @@ const globalCss = `
     .vh-worksheet-row { align-items: stretch !important; }
     .vh-worksheet-prompt { min-width: 0 !important; flex: 1 1 100% !important; }
     .vh-worksheet-input { min-width: 0 !important; width: 100% !important; }
+  }
+
+  /* Group Practice mobile layout: compact, readable, touch-friendly */
+  .vh-group-settings { align-items: flex-end; }
+  .vh-group-settings select { max-width: 100%; }
+  .vh-group-dir-buttons { width: 100%; }
+  .vh-group-dir-btn { min-width: 0; }
+  .vh-group-start { min-height: 42px; }
+
+  @media (max-width: 780px) {
+    .vh-group-card { overflow: hidden !important; }
+    .vh-group-settings { display: grid !important; grid-template-columns: minmax(0, 1fr) 92px !important; gap: 10px !important; width: 100% !important; }
+    .vh-group-settings > label { min-width: 0 !important; }
+    .vh-group-settings select { width: 100% !important; min-width: 0 !important; }
+    .vh-group-dir-buttons { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    .vh-group-dir-btn { width: 100% !important; padding: 10px 8px !important; font-size: 12.5px !important; line-height: 1.25 !important; white-space: normal !important; }
+    .vh-group-start { width: 100% !important; }
+    .vh-group-worksheet { gap: 6px !important; }
+    .vh-group-worksheet .vh-worksheet-row {
+      display: grid !important;
+      grid-template-columns: 24px minmax(0, 1fr) !important;
+      align-items: center !important;
+      column-gap: 8px !important;
+      row-gap: 7px !important;
+      padding: 9px 10px !important;
+    }
+    .vh-group-worksheet .vh-worksheet-index { grid-column: 1; grid-row: 1; }
+    .vh-group-worksheet .vh-worksheet-prompt {
+      grid-column: 2 !important; grid-row: 1 !important;
+      min-width: 0 !important; width: 100% !important; flex: none !important;
+      overflow: hidden !important;
+    }
+    .vh-group-worksheet .vh-worksheet-word {
+      font-size: 14px !important; line-height: 1.25 !important;
+      overflow-wrap: anywhere !important; word-break: break-word !important;
+    }
+    .vh-group-worksheet .vh-worksheet-input {
+      grid-column: 1 / -1 !important; grid-row: 2 !important;
+      width: 100% !important; min-width: 0 !important;
+      padding: 9px 10px !important; font-size: 14px !important;
+      height: 40px !important;
+    }
+    .vh-group-worksheet .vh-artikel-badge-small { font-size: 10px !important; }
   }
 
   @media (max-width: 480px) {
