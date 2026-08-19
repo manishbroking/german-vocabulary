@@ -24,6 +24,11 @@ import {
   Cloud,
   CloudOff,
   Loader2,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowLeft,
 } from "lucide-react";
 import {
   getUser,
@@ -32,6 +37,8 @@ import {
   logout,
   onAuthChange,
   handleAuthCallback,
+  requestPasswordRecovery,
+  updateUser,
   AuthError,
 } from "@netlify/identity";
 
@@ -3725,6 +3732,7 @@ export default function GermanVocabTrainer() {
   const [saveError, setSaveError] = useState(false);
   const [authUser, setAuthUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState("login");
   const [syncState, setSyncState] = useState("idle");
   const [hasSyncedOnce, setHasSyncedOnce] = useState(false);
   const vocabRef = useRef(vocab);
@@ -3742,7 +3750,11 @@ export default function GermanVocabTrainer() {
     let unsubscribe = () => {};
     (async () => {
       try {
-        await handleAuthCallback();
+        const result = await handleAuthCallback();
+        if (result?.type === "recovery") {
+          setAuthModalMode("reset");
+          setAuthModalOpen(true);
+        }
       } catch (e) {}
       setAuthUser(await getUser());
     })();
@@ -3996,11 +4008,27 @@ export default function GermanVocabTrainer() {
           lofi={lofi}
           authUser={authUser}
           syncState={syncState}
-          onOpenAuth={() => setAuthModalOpen(true)}
+          onOpenAuth={() => {
+            setAuthModalMode("login");
+            setAuthModalOpen(true);
+          }}
           onLogout={handleLogout}
         />
 
-        {authModalOpen && <AuthModal onClose={() => setAuthModalOpen(false)} onAuthed={(user) => { setAuthUser(user); setAuthModalOpen(false); }} />}
+        {authModalOpen && (
+          <AuthModal
+            initialMode={authModalMode}
+            onClose={() => {
+              setAuthModalOpen(false);
+              setAuthModalMode("login");
+            }}
+            onAuthed={(user) => {
+              setAuthUser(user);
+              setAuthModalOpen(false);
+              setAuthModalMode("login");
+            }}
+          />
+        )}
 
         <div className="vh-tabs" style={styles.tabs}>
           <TabButton active={tab === "passive"} onClick={() => setTab("passive")} icon={<BookOpen size={15} />}>
@@ -4170,13 +4198,16 @@ function AccountControl({ authUser, syncState, onOpenAuth, onLogout }) {
   );
 }
 
-function AuthModal({ onClose, onAuthed }) {
-  const [mode, setMode] = useState("login");
+function AuthModal({ onClose, onAuthed, initialMode = "login" }) {
+  const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const friendlyError = (err) => {
     if (err instanceof AuthError) {
@@ -4189,22 +4220,45 @@ function AuthModal({ onClose, onAuthed }) {
     return "Something went wrong. Please try again.";
   };
 
+  const switchMode = (next) => {
+    setMode(next);
+    setError("");
+    setMessage("");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setMessage("");
     setLoading(true);
     try {
       if (mode === "login") {
         const user = await login(email, password);
         onAuthed(user);
-      } else {
+      } else if (mode === "signup") {
         const user = await signup(email, password, { full_name: name });
         if (user.emailVerified) {
           onAuthed(user);
         } else {
-          setError("Check your email to confirm your account, then log in.");
-          setMode("login");
+          setMessage("Check your email to confirm your account, then log in.");
+          switchMode("login");
         }
+      } else if (mode === "forgot") {
+        await requestPasswordRecovery(email);
+        setMessage("If an account exists for that email, a reset link is on its way.");
+      } else if (mode === "reset") {
+        if (password.length < 6) {
+          setError("Use a password with at least 6 characters.");
+          setLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError("Passwords don't match.");
+          setLoading(false);
+          return;
+        }
+        const user = await updateUser({ password });
+        onAuthed(user);
       }
     } catch (err) {
       setError(friendlyError(err));
@@ -4213,62 +4267,160 @@ function AuthModal({ onClose, onAuthed }) {
     }
   };
 
+  const copy = {
+    login: { icon: <User size={20} />, title: "Welcome back", subtitle: "Log in to sync your vocabulary and progress across every device." },
+    signup: { icon: <Sparkles size={20} />, title: "Create your profile", subtitle: "Save your progress and pick up where you left off, anywhere." },
+    forgot: { icon: <Mail size={20} />, title: "Reset your password", subtitle: "Enter your email and we'll send you a link to choose a new one." },
+    reset: { icon: <Lock size={20} />, title: "Set a new password", subtitle: "Choose a new password to finish resetting your account." },
+  }[mode];
+
   return (
-    <div className="vh-modal-overlay" style={styles.modalOverlay} onClick={onClose}>
+    <div className="vh-modal-overlay" style={styles.modalOverlay} onClick={mode === "reset" ? undefined : onClose}>
       <div className="vh-card" style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-        <button className="vh-btn" onClick={onClose} style={styles.modalClose} type="button" aria-label="Close">
-          <X size={16} />
-        </button>
-        <h2 style={styles.modalTitle}>{mode === "login" ? "Log in" : "Create your profile"}</h2>
-        <p style={styles.modalSubtitle}>
-          {mode === "login" ? "Sync your vocabulary and progress across devices." : "Save your progress and pick up where you left off, anywhere."}
-        </p>
+        {mode !== "reset" && (
+          <button className="vh-btn" onClick={onClose} style={styles.modalClose} type="button" aria-label="Close">
+            <X size={16} />
+          </button>
+        )}
+        <div style={styles.modalIconBadge}>{copy.icon}</div>
+        <h2 style={styles.modalTitle}>{copy.title}</h2>
+        <p style={styles.modalSubtitle}>{copy.subtitle}</p>
+
         <form onSubmit={handleSubmit} style={styles.authForm}>
-          {mode === "signup" && (
-            <input
-              placeholder="Your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={styles.input}
-              autoComplete="name"
-            />
+          {mode === "forgot" && (
+            <button type="button" className="vh-btn" style={styles.backLink} onClick={() => switchMode("login")}>
+              <ArrowLeft size={13} /> Back to log in
+            </button>
           )}
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={styles.input}
-            autoComplete="email"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={styles.input}
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            minLength={6}
-            required
-          />
+
+          {mode === "signup" && (
+            <div style={styles.inputGroup}>
+              <User size={14} style={styles.inputIcon} />
+              <input
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={styles.inputWithIcon}
+                autoComplete="name"
+              />
+            </div>
+          )}
+
+          {(mode === "login" || mode === "signup" || mode === "forgot") && (
+            <div style={styles.inputGroup}>
+              <Mail size={14} style={styles.inputIcon} />
+              <input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={styles.inputWithIcon}
+                autoComplete="email"
+                required
+              />
+            </div>
+          )}
+
+          {(mode === "login" || mode === "signup") && (
+            <div style={styles.inputGroup}>
+              <Lock size={14} style={styles.inputIcon} />
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{ ...styles.inputWithIcon, paddingRight: 38 }}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                minLength={6}
+                required
+              />
+              <button
+                type="button"
+                style={styles.passwordToggle}
+                onClick={() => setShowPassword((s) => !s)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          )}
+
+          {mode === "login" && (
+            <button type="button" className="vh-btn" style={styles.forgotLink} onClick={() => switchMode("forgot")}>
+              Forgot password?
+            </button>
+          )}
+
+          {mode === "reset" && (
+            <>
+              <div style={styles.inputGroup}>
+                <Lock size={14} style={styles.inputIcon} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="New password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ ...styles.inputWithIcon, paddingRight: 38 }}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  style={styles.passwordToggle}
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              <div style={styles.inputGroup}>
+                <Lock size={14} style={styles.inputIcon} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={styles.inputWithIcon}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+              </div>
+            </>
+          )}
+
           {error && <div style={styles.saveError}>{error}</div>}
+          {message && <div style={styles.saveSuccess}>{message}</div>}
+
           <button className="vh-btn" type="submit" style={{ ...styles.addBtn, width: "100%", justifyContent: "center" }} disabled={loading}>
-            {loading ? <Loader2 size={15} className="vh-spin" /> : mode === "login" ? <User size={15} /> : <Sparkles size={15} />}
-            {loading ? "Please wait…" : mode === "login" ? "Log in" : "Sign up"}
+            {loading ? (
+              <Loader2 size={15} className="vh-spin" />
+            ) : mode === "login" ? (
+              <User size={15} />
+            ) : mode === "signup" ? (
+              <Sparkles size={15} />
+            ) : mode === "forgot" ? (
+              <Mail size={15} />
+            ) : (
+              <Lock size={15} />
+            )}
+            {loading
+              ? "Please wait…"
+              : mode === "login"
+              ? "Log in"
+              : mode === "signup"
+              ? "Sign up"
+              : mode === "forgot"
+              ? "Send reset link"
+              : "Update password"}
           </button>
         </form>
-        <button
-          className="vh-btn"
-          type="button"
-          style={styles.modalToggle}
-          onClick={() => {
-            setError("");
-            setMode(mode === "login" ? "signup" : "login");
-          }}
-        >
-          {mode === "login" ? "New here? Create a profile" : "Already have a profile? Log in"}
-        </button>
+        {(mode === "login" || mode === "signup") && (
+          <button className="vh-btn" type="button" style={styles.modalToggle} onClick={() => switchMode(mode === "login" ? "signup" : "login")}>
+            {mode === "login" ? "New here? Create a profile" : "Already have a profile? Log in"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -5465,7 +5617,7 @@ const styles = {
     padding: 16,
     zIndex: 50,
   },
-  modalCard: { width: "100%", maxWidth: 380, padding: "32px 26px 26px" },
+  modalCard: { width: "100%", maxWidth: 380, padding: "36px 26px 26px" },
   modalClose: {
     position: "absolute",
     top: 14,
@@ -5481,9 +5633,68 @@ const styles = {
     justifyContent: "center",
     cursor: "pointer",
   },
-  modalTitle: { fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, margin: "0 0 6px", color: "#1F2A44" },
-  modalSubtitle: { margin: "0 0 18px", fontSize: 13, color: "#8A8474", lineHeight: 1.4 },
+  modalIconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: "0 auto 14px",
+    background: "linear-gradient(180deg,#28345A,#1F2A44)",
+    color: "#FBF8F1",
+    boxShadow: "0 4px 12px rgba(31,42,68,0.28)",
+  },
+  modalTitle: { fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, margin: "0 0 6px", color: "#1F2A44", textAlign: "center" },
+  modalSubtitle: { margin: "0 0 20px", fontSize: 13, color: "#8A8474", lineHeight: 1.5, textAlign: "center" },
   authForm: { display: "flex", flexDirection: "column", gap: 10 },
+  inputGroup: { position: "relative", display: "flex", alignItems: "center" },
+  inputIcon: { position: "absolute", left: 12, color: "#A39C88", pointerEvents: "none" },
+  inputWithIcon: {
+    width: "100%",
+    padding: "10px 12px 10px 36px",
+    borderRadius: 8,
+    border: "1px solid #E4DDCB",
+    fontSize: 13.5,
+    fontFamily: "inherit",
+    color: "#2A2620",
+  },
+  passwordToggle: {
+    position: "absolute",
+    right: 10,
+    background: "none",
+    border: "none",
+    color: "#A39C88",
+    cursor: "pointer",
+    padding: 4,
+    display: "flex",
+    alignItems: "center",
+  },
+  forgotLink: {
+    alignSelf: "flex-end",
+    background: "none",
+    border: "none",
+    color: "#3D5A8A",
+    fontSize: 12.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: "2px 0",
+    marginTop: -2,
+  },
+  backLink: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    background: "none",
+    border: "none",
+    color: "#8A8474",
+    fontSize: 12.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: "0 0 2px",
+    marginBottom: 2,
+    alignSelf: "flex-start",
+  },
   modalToggle: {
     marginTop: 14,
     width: "100%",
@@ -5614,4 +5825,5 @@ const styles = {
   listBtnLeft: { display: "flex", alignItems: "center", gap: 8 },
   listCount: { fontSize: 12, color: "#A39C88", fontWeight: 700 },
   saveError: { fontSize: 12, color: "#B5443B", background: "#FBEAEA", padding: 10, borderRadius: 8 },
+  saveSuccess: { fontSize: 12, color: "#215339", background: "#E9F3ED", padding: 10, borderRadius: 8, lineHeight: 1.4 },
 };
