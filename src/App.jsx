@@ -1327,7 +1327,7 @@ function pickNextNewWord(source, stats, excludeId) {
   return brandNew[1];
 }
 
-function pickSmartWord(source, stats, excludeId) {
+function pickSmartWord(source, stats, excludeId, ignoreNewWordCap) {
   if (source.length === 0) return null;
   const now = Date.now();
   const dueNow = [];
@@ -1356,7 +1356,7 @@ function pickSmartWord(source, stats, excludeId) {
     return pool[Math.floor(Math.random() * pool.length)];
   };
 
-  const canIntroduceNew = brandNew.length > 0 && stats.newWordsToday < stats.newWordCap;
+  const canIntroduceNew = brandNew.length > 0 && (ignoreNewWordCap || stats.newWordsToday < stats.newWordCap);
   const r = Math.random();
 
   if (dueNow.length > 0 && (r < 0.6 || !canIntroduceNew)) {
@@ -1908,7 +1908,66 @@ function Header({ vocabCount, overallPct, streak, achievements, audioAutoplay, o
   );
 }
 
+const AVATAR_PALETTES = [
+  ["#D4A94F", "#B5443B"],
+  ["#3D5A8A", "#4F8A66"],
+  ["#A13D5C", "#D97B3C"],
+  ["#3F7859", "#28345A"],
+  ["#7A5A2B", "#215339"],
+  ["#1F2A44", "#D4A94F"],
+];
+
+function avatarPaletteFor(seed) {
+  const s = seed || "?";
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTES[hash % AVATAR_PALETTES.length];
+}
+
+function Avatar({ seed, label, size = 32 }) {
+  const [c1, c2] = avatarPaletteFor(seed);
+  const initial = (label || "?").trim().charAt(0).toUpperCase() || "?";
+  return (
+    <span
+      className="vh-avatar"
+      style={{
+        width: size,
+        height: size,
+        minWidth: size,
+        borderRadius: "50%",
+        background: `linear-gradient(135deg, ${c1}, ${c2})`,
+        color: "#FBF8F1",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "'Fraunces', serif",
+        fontWeight: 700,
+        fontSize: Math.round(size * 0.42),
+        boxShadow: "0 2px 6px rgba(31,42,68,0.25)",
+      }}
+    >
+      {initial}
+    </span>
+  );
+}
+
 function AccountControl({ authUser, syncState, onOpenAuth, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("touchstart", onOutside);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("touchstart", onOutside);
+    };
+  }, [open]);
+
   if (!authUser) {
     return (
       <button className="vh-btn" onClick={onOpenAuth} style={styles.accountBtn} type="button">
@@ -1917,25 +1976,52 @@ function AccountControl({ authUser, syncState, onOpenAuth, onLogout }) {
     );
   }
 
-  const label = authUser.userMetadata?.full_name || authUser.email;
+  const fullName = authUser.userMetadata?.full_name;
+  const label = fullName || authUser.email;
+  const seed = authUser.id || authUser.email || "user";
   const syncIcon =
     syncState === "syncing" ? (
-      <Loader2 size={13} className="vh-spin" />
+      <Loader2 size={12} className="vh-spin" />
     ) : syncState === "error" ? (
-      <CloudOff size={13} color="#B5443B" />
+      <CloudOff size={12} color="#B5443B" />
     ) : (
-      <Cloud size={13} color="#4F8A66" />
+      <Cloud size={12} color="#4F8A66" />
     );
   const syncTitle = syncState === "syncing" ? "Syncing your profile…" : syncState === "error" ? "Couldn't sync — will retry" : "Profile synced";
 
   return (
-    <div className="vh-account" style={styles.accountWrap} title={label}>
-      <span style={styles.accountName}>
-        {syncIcon} {label}
-      </span>
-      <button className="vh-btn" onClick={onLogout} style={styles.iconToggle} title="Log out" type="button">
-        <LogOut size={14} />
+    <div className="vh-account" style={styles.accountWrap} ref={wrapRef}>
+      <button
+        className="vh-btn"
+        onClick={() => setOpen((o) => !o)}
+        style={styles.avatarBtn}
+        title={label}
+        type="button"
+      >
+        <Avatar seed={seed} label={label} size={32} />
       </button>
+
+      {open && (
+        <div className="vh-account-popover" style={styles.accountPopover}>
+          <Avatar seed={seed} label={label} size={56} />
+          <div style={styles.accountPopoverName}>{fullName || "Your profile"}</div>
+          <div style={styles.accountPopoverEmail}>{authUser.email}</div>
+          <div style={{ ...styles.accountPopoverSync, color: syncState === "error" ? "#B5443B" : "#8A8474" }}>
+            {syncIcon} {syncTitle}
+          </div>
+          <button
+            className="vh-btn"
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
+            style={styles.accountPopoverLogout}
+            type="button"
+          >
+            <LogOut size={14} /> Log out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2216,7 +2302,7 @@ function PassiveQuiz({ pool, category, filteredPoolWords, allVocab, stats, recor
   const buildQuestion = useCallback(
     (excludeId) => {
       const source = filteredPoolWords;
-      const target = pool === "all" ? pickSmartWord(source, stats, excludeId) : pool === "new" ? pickNextNewWord(source, stats, excludeId) : source.length ? source[Math.floor(Math.random() * source.length)] : null;
+      const target = pool === "all" ? pickSmartWord(source, stats, excludeId, category !== "all") : pool === "new" ? pickNextNewWord(source, stats, excludeId) : source.length ? source[Math.floor(Math.random() * source.length)] : null;
       if (!target) return null;
       const targetKey = englishKey(target.en);
       const others = shuffle(
@@ -2224,7 +2310,7 @@ function PassiveQuiz({ pool, category, filteredPoolWords, allVocab, stats, recor
       ).slice(0, 5);
       return { target, options: shuffle([target, ...others]) };
     },
-    [pool, filteredPoolWords, allVocab, stats]
+    [pool, category, filteredPoolWords, allVocab, stats]
   );
   const buildQuestionRef = useRef(buildQuestion);
   buildQuestionRef.current = buildQuestion;
@@ -2356,9 +2442,9 @@ function ActiveQuiz({ pool, category, filteredPoolWords, allVocab, stats, record
     (excludeId) => {
       const source = filteredPoolWords;
       if (source.length === 0) return null;
-      return pool === "all" ? pickSmartWord(source, stats, excludeId) : pool === "new" ? pickNextNewWord(source, stats, excludeId) : source[Math.floor(Math.random() * source.length)];
+      return pool === "all" ? pickSmartWord(source, stats, excludeId, category !== "all") : pool === "new" ? pickNextNewWord(source, stats, excludeId) : source[Math.floor(Math.random() * source.length)];
     },
-    [pool, filteredPoolWords, stats]
+    [pool, category, filteredPoolWords, stats]
   );
   const buildQuestionRef = useRef(buildQuestion);
   buildQuestionRef.current = buildQuestion;
@@ -2515,37 +2601,27 @@ function ActiveQuiz({ pool, category, filteredPoolWords, allVocab, stats, record
 
 function buildBatch(source, stats, size) {
   if (source.length === 0) return [];
-  const now = Date.now();
-  const due = source.filter((w) => {
-    const s = stats.wordStats[w.id];
-    return s && s.seen > 0 && (s.dueAt || 0) <= now;
-  });
-  due.sort((a, b) => {
-    const sa = stats.wordStats[a.id];
-    const sb = stats.wordStats[b.id];
-    const pa = isProblem(sa) ? 0 : 1;
-    const pb = isProblem(sb) ? 0 : 1;
-    if (pa !== pb) return pa - pb;
-    return (sa.dueAt || 0) - (sb.dueAt || 0);
-  });
-  const newWordsRemaining = Math.max(0, (stats.newWordCap || 0) - (stats.newWordsToday || 0));
-  const brandNew = source
-    .filter((w) => {
+  // Batch is built from words already learned or currently a problem, shuffled fresh on
+  // every rebatch. If that's not enough to fill the batch, brand-new words are added in the
+  // same list-order sequence Passive/Active use to trickle in new words.
+  const reviewable = shuffle(
+    source.filter((w) => {
       const s = stats.wordStats[w.id];
-      return !s || s.seen === 0;
+      return s && s.seen > 0;
     })
-    .sort((a, b) => source.indexOf(a) - source.indexOf(b))
-    .slice(0, newWordsRemaining);
-  const usedIds = new Set([...due, ...brandNew].map((w) => w.id));
-  const rest = shuffle(source.filter((w) => !usedIds.has(w.id)));
-  return [...due, ...brandNew, ...rest].slice(0, Math.min(size, source.length));
+  );
+  const usedIds = new Set(reviewable.map((w) => w.id));
+  const brandNew = source
+    .filter((w) => !usedIds.has(w.id))
+    .sort((a, b) => source.indexOf(a) - source.indexOf(b));
+  return [...reviewable, ...brandNew].slice(0, Math.min(size, source.length));
 }
 
 function scoreEmoji(pct) {
-  if (pct >= 90) return { emoji: "🏆", text: "Zabardast! Bilkul on point." };
-  if (pct >= 70) return { emoji: "🎉", text: "Bahut badiya, keep going." };
-  if (pct >= 50) return { emoji: "🙂", text: "Achha start — thoda aur practice." };
-  return { emoji: "😅", text: "Koi baat nahi, dobara try karo." };
+  if (pct >= 90) return { emoji: "🏆", text: "Excellent! Right on target." };
+  if (pct >= 70) return { emoji: "🎉", text: "Great job, keep going." };
+  if (pct >= 50) return { emoji: "🙂", text: "Good start — a bit more practice." };
+  return { emoji: "😅", text: "No worries, try again." };
 }
 
 function GroupPractice({ vocab, stats, recordAttempt, locked }) {
@@ -3134,7 +3210,7 @@ function CategoryPanel({ category, setCategory }) {
 
 function EmptyState({ pool }) {
   const messages = {
-    problem: "🎉 No problem words right now — sab mastered hai is category me!",
+    problem: "🎉 No problem words right now — everything's mastered in this category!",
     new: "You've seen every word in this category. Try another category or Group practice.",
     learned: "Nothing mastered here yet — keep practicing!",
   };
@@ -3379,7 +3455,7 @@ const styles = {
     cursor: "pointer",
     boxShadow: "0 1px 2px rgba(31,42,68,0.05)",
   },
-  accountWrap: { display: "flex", alignItems: "center", gap: 6 },
+  accountWrap: { position: "relative", display: "flex", alignItems: "center", gap: 6 },
   accountName: {
     display: "flex",
     alignItems: "center",
@@ -3391,6 +3467,74 @@ const styles = {
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
+  },
+  avatarBtn: {
+    padding: 0,
+    border: "none",
+    background: "transparent",
+    borderRadius: "50%",
+    cursor: "pointer",
+    lineHeight: 0,
+  },
+  accountPopover: {
+    position: "absolute",
+    top: "calc(100% + 10px)",
+    right: 0,
+    zIndex: 60,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 4,
+    width: 220,
+    padding: "18px 16px 16px",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    border: "1px solid #E4DDCB",
+    boxShadow: "0 12px 28px rgba(31,42,68,0.18)",
+    textAlign: "center",
+    animation: "vhFadeIn .15s ease",
+  },
+  accountPopoverName: {
+    marginTop: 10,
+    fontFamily: "'Fraunces', serif",
+    fontWeight: 700,
+    fontSize: 16,
+    color: "#1F2A44",
+    maxWidth: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  accountPopoverEmail: {
+    fontSize: 12.5,
+    color: "#8A8474",
+    maxWidth: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  accountPopoverSync: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 11.5,
+    marginTop: 6,
+  },
+  accountPopoverLogout: {
+    marginTop: 14,
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 34,
+    borderRadius: 999,
+    border: "1px solid #E4DDCB",
+    background: "#FBF3E7",
+    color: "#B5443B",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
   },
   modalOverlay: {
     position: "fixed",
