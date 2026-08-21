@@ -1866,7 +1866,7 @@ function Header({ vocabCount, overallPct, streak, achievements, audioAutoplay, o
   return (
     <div>
       <div className="vh-header-row" style={styles.headerRow}>
-        <div style={styles.brandRow}>
+        <div className="vh-brand-row" style={styles.brandRow}>
           <img src="/icons/icon-512.png" alt="DeutschVocab logo" style={styles.logo} />
           <div>
             <h1 className="vh-title" style={styles.title}>DeutschVocab</h1>
@@ -3304,10 +3304,15 @@ const globalCss = `
     .vh-header-row {
       align-items: center !important;
       gap: 10px !important;
+      flex-wrap: wrap !important;
+    }
+    .vh-brand-row {
+      min-width: 0 !important;
     }
     .vh-header-controls {
       gap: 5px !important;
       flex-shrink: 0 !important;
+      margin-left: auto !important;
     }
     .vh-title { font-size: 29px !important; }
     .vh-subtitle { font-size: 13px !important; }
