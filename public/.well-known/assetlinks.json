@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.netlify.deutschvocab_trainer.twa",
+        "sha256_cert_fingerprints": ["9C:C5:46:D7:89:00:B8:EE:63:84:6C:55:5E:F5:F5:96:9D:2B:64:B8:79:A9:DD:05:7F:C3:35:15:BA:2E:1D:1D"]
+      }
+    }]
