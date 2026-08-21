@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Coffee,
   User,
+  LogIn,
   LogOut,
   Cloud,
   CloudOff,
@@ -1993,8 +1994,14 @@ function AccountControl({ authUser, syncState, onOpenAuth, onLogout }) {
 
   if (!authUser) {
     return (
-      <button className="vh-btn" onClick={onOpenAuth} style={styles.accountBtn} type="button">
-        <User size={14} /> Log in
+      <button
+        className="vh-btn"
+        onClick={onOpenAuth}
+        style={styles.loginAvatarBtn}
+        title="Log in"
+        type="button"
+      >
+        <LogIn size={16} />
       </button>
     );
   }
@@ -3477,21 +3484,6 @@ const styles = {
   },
   iconToggleActive: { background: "linear-gradient(180deg,#E0B565,#D4A94F)", color: "#3A2C0B", borderColor: "#D4A94F" },
   volumeSlider: { width: 70, accentColor: "#D4A94F" },
-  accountBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    height: 32,
-    padding: "0 12px",
-    borderRadius: 999,
-    border: "1px solid #E4DDCB",
-    background: "#FFFFFF",
-    color: "#2A2620",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    boxShadow: "0 1px 2px rgba(31,42,68,0.05)",
-  },
   accountWrap: { position: "relative", display: "flex", alignItems: "center", gap: 6 },
   accountName: {
     display: "flex",
@@ -3512,6 +3504,21 @@ const styles = {
     borderRadius: "50%",
     cursor: "pointer",
     lineHeight: 0,
+  },
+  loginAvatarBtn: {
+    width: 32,
+    height: 32,
+    minWidth: 32,
+    padding: 0,
+    border: "1px solid #E4DDCB",
+    borderRadius: "50%",
+    background: "#FFFFFF",
+    color: "#2A2620",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    boxShadow: "0 2px 6px rgba(31,42,68,0.15)",
   },
   accountPopover: {
     position: "absolute",
