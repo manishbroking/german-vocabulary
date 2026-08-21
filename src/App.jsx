@@ -1171,17 +1171,17 @@ function useLofiMusic() {
       if (ctx.state === "suspended") ctx.resume();
       const master = masterGainRef.current;
 
-      // Warm, slow chord loop: Cmaj7 -> Am7 -> Fmaj7 -> G6.
+      // Warm, drifting chord loop: Dm9 -> G13 -> Cmaj9 -> Am11.
       const chords = [
+        [146.83, 174.61, 220.0, 261.63],
+        [196.0, 246.94, 293.66, 349.23],
         [261.63, 329.63, 392.0, 493.88],
         [220.0, 261.63, 329.63, 392.0],
-        [174.61, 220.0, 261.63, 329.63],
-        [196.0, 246.94, 293.66, 392.0],
       ];
-      const bass = [130.81, 110.0, 87.31, 98.0];
-      const melody = [659.25, 587.33, 523.25, 493.88, 523.25, 587.33, 659.25, 783.99];
-      const chordDuration = 4.8;
-      const beatDuration = 0.6;
+      const bass = [73.42, 98.0, 65.41, 110.0];
+      const melody = [587.33, 523.25, 440.0, 392.0, 440.0, 523.25, 587.33, 698.46];
+      const chordDuration = 4.4;
+      const beatDuration = 0.55;
       let chordIndex = 0;
       let beat = 0;
 
@@ -1866,7 +1866,7 @@ function Header({ vocabCount, overallPct, streak, achievements, audioAutoplay, o
   return (
     <div>
       <div className="vh-header-row" style={styles.headerRow}>
-        <div style={styles.brandRow}>
+        <div className="vh-brand-row" style={styles.brandRow}>
           <img src="/icons/icon-512.png" alt="DeutschVocab logo" style={styles.logo} />
           <div>
             <h1 className="vh-title" style={styles.title}>DeutschVocab</h1>
@@ -1993,7 +1993,7 @@ function AccountControl({ authUser, syncState, onOpenAuth, onLogout }) {
 
   if (!authUser) {
     return (
-      <button className="vh-btn" onClick={onOpenAuth} style={styles.accountBtn} type="button">
+      <button className="vh-btn vh-account" onClick={onOpenAuth} style={styles.accountBtn} type="button">
         <User size={14} /> Log in
       </button>
     );
@@ -3302,12 +3302,28 @@ const globalCss = `
     .vh-footer-hint { line-height: 1.45; }
 
     .vh-header-row {
-      align-items: center !important;
+      align-items: flex-start !important;
       gap: 10px !important;
+      flex-wrap: wrap !important;
+    }
+    .vh-brand-row {
+      min-width: 0 !important;
+      flex: 1 1 auto !important;
+    }
+    .vh-brand-row .vh-title, .vh-brand-row .vh-subtitle {
+      overflow-wrap: anywhere !important;
     }
     .vh-header-controls {
       gap: 5px !important;
       flex-shrink: 0 !important;
+      flex-wrap: wrap !important;
+      justify-content: flex-end !important;
+      row-gap: 6px !important;
+    }
+    .vh-header-controls .vh-account {
+      order: -1 !important;
+      flex: 0 0 100% !important;
+      justify-content: flex-end !important;
     }
     .vh-title { font-size: 29px !important; }
     .vh-subtitle { font-size: 13px !important; }
