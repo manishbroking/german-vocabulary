@@ -1464,6 +1464,22 @@ function mergeWords(existing, packRows, refreshExamples = true) {
   return [...updated, ...added];
 }
 
+// Netlify Identity sets its nf_jwt/nf_refresh auth cookies with no expiry, so
+// browsers drop them as session-only cookies once the browser fully closes —
+// even though the login itself is still saved in localStorage. Re-writing the
+// same cookies with a long max-age keeps the saved login recognized across
+// browser restarts instead of forcing a fresh login every time.
+function persistIdentityCookies() {
+  if (typeof document === "undefined") return;
+  const THIRTY_DAYS = 60 * 60 * 24 * 30;
+  ["nf_jwt", "nf_refresh"].forEach((name) => {
+    const match = new RegExp(`(?:^|; )${name}=([^;]*)`).exec(document.cookie);
+    if (match) {
+      document.cookie = `${name}=${match[1]}; path=/; secure; samesite=lax; max-age=${THIRTY_DAYS}`;
+    }
+  });
+}
+
 export default function GermanVocabTrainer() {
   const [ready, setReady] = useState(false);
   const [vocab, setVocab] = useState([]);
@@ -1499,8 +1515,12 @@ export default function GermanVocabTrainer() {
         }
       } catch (e) {}
       setAuthUser(await getUser());
+      persistIdentityCookies();
     })();
-    unsubscribe = onAuthChange((_event, user) => setAuthUser(user));
+    unsubscribe = onAuthChange((_event, user) => {
+      setAuthUser(user);
+      persistIdentityCookies();
+    });
     return () => unsubscribe();
   }, []);
 
@@ -3365,8 +3385,20 @@ const globalCss = `
     .vh-title { font-size: 27px !important; }
     .vh-chip-row { gap: 6px !important; margin-bottom: 14px !important; }
     .vh-chip { font-size: 11.5px !important; padding: 5px 9px !important; }
-    .vh-tabs { gap: 6px !important; margin-bottom: 14px !important; }
-    .vh-tab-btn { padding: 8px 10px !important; font-size: 12px !important; }
+    .vh-tabs {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px !important;
+      margin-bottom: 14px !important;
+    }
+    .vh-tab-btn {
+      padding: 9px 6px !important;
+      font-size: 12px !important;
+      width: 100% !important;
+      flex: none !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
     .vh-german-word { font-size: 23px !important; line-height: 1.15 !important; text-align: center !important; }
     .vh-artikel-badge { font-size: 13px !important; padding: 3px 8px !important; }
     .vh-qhead { justify-content: center !important; }
@@ -3385,7 +3417,7 @@ const globalCss = `
     .vh-title { font-size: 25px !important; }
     .vh-subtitle { font-size: 12px !important; }
     .vh-icon-toggle { width: 30px !important; height: 30px !important; }
-    .vh-tab-btn { padding: 7px 8px !important; font-size: 11.5px !important; }
+    .vh-tab-btn { padding: 8px 5px !important; font-size: 11px !important; gap: 4px !important; }
     .vh-chip { font-size: 11px !important; }
   }
 `;
