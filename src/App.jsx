@@ -1866,9 +1866,12 @@ function Header({ vocabCount, overallPct, streak, achievements, audioAutoplay, o
   return (
     <div>
       <div className="vh-header-row" style={styles.headerRow}>
-        <div>
-          <h1 className="vh-title" style={styles.title}>Vokabelheft</h1>
-          <p className="vh-subtitle" style={styles.subtitle}>{vocabCount}+ words · your own pace</p>
+        <div style={styles.brandRow}>
+          <img src="/icons/icon-512.png" alt="DeutschVocab logo" style={styles.logo} />
+          <div>
+            <h1 className="vh-title" style={styles.title}>DeutschVocab</h1>
+            <p className="vh-subtitle" style={styles.subtitle}>{vocabCount}+ words · your own pace</p>
+          </div>
         </div>
         <div className="vh-header-controls" style={styles.headerControls}>
           <button
@@ -3453,6 +3456,8 @@ const styles = {
   },
   coffeeQr: { width: 140, height: 140, borderRadius: 10, border: "1px solid #F0DFC0", marginTop: 4 },
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
+  brandRow: { display: "flex", alignItems: "center", gap: 12 },
+  logo: { width: 44, height: 44, borderRadius: 12, flexShrink: 0 },
   title: { fontFamily: "'Fraunces', serif", fontSize: 32, fontWeight: 700, margin: 0, color: "#1F2A44" },
   subtitle: { margin: "4px 0 0", color: "#8A8474", fontSize: 14 },
   flagDot: { display: "flex", gap: 4 },
