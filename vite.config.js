@@ -9,6 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
+        id: '/',
         name: 'DeutschVocab Trainer',
         short_name: 'DeutschVocab',
         description: 'Learn and practice German vocabulary with spaced repetition and quizzes.',
